@@ -326,10 +326,8 @@ def hyperparameter_tuning(dataset_name):
             print(f'MODEL SESSION: {SAVE_PATH_}')
 
     # Load and preprocess the training and testing data
-    train = pd.read_csv(
-        f'C:\\Users\\Faraz\\PycharmProjects\\AE-LSTM\\dataset\\{dataset_name}\\file\\preprocessed\\train_binary.csv')
-    test = pd.read_csv(
-        f'C:\\Users\\Faraz\\PycharmProjects\\AE-LSTM\\dataset\\{dataset_name}\\file\\preprocessed\\test_binary.csv')
+    train = pd.read_csv(os.path.join(BASE_DIR, 'dataset', f'{dataset_name}', 'file', 'preprocessed', 'train_binary.csv'))
+    test = pd.read_csv(os.path.join(BASE_DIR, 'dataset', f'{dataset_name}', 'file', 'preprocessed', 'test_binary.csv'))
 
     XGlobal, YGlobal = parse_data(train, dataset_name=dataset_name, mode='np',
                                   classification_mode='binary')
