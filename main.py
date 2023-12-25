@@ -400,10 +400,8 @@ def hyperparameter_tuning(dataset_name):
     print('test set:', XTestGlobal.shape, YTestGlobal.shape)
 
     ae_hyperparameters_to_optimize = {
-        # "hidden_size": [32, 64, 128],
-        # "optimizer": ['sgd', 'adam']
-        "hidden_size": [128],
-        "optimizer": ['sgd']
+        "hidden_size": [32, 64, 128],
+        "optimizer": ['sgd', 'adam']
     }
     keys = list(ae_hyperparameters_to_optimize.keys())
     values = list(ae_hyperparameters_to_optimize.values())
