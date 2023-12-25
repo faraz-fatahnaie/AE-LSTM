@@ -79,7 +79,8 @@ def train_ae(params, dataset_name):
     loss_fn = 'mse'
     ae_epoch = 150
     ae_filename = f'{dataset_name}_H-{hidden_size}_O-{opt}_A-{activation}_L-{loss_fn}_E{ae_epoch}'
-    ae_path = Path(f'C:\\Users\\Faraz\\PycharmProjects\\AE-LSTM\\trained_ae\\{ae_filename}.keras')
+    BASE_DIR = Path(__file__).resolve().parent
+    ae_path = os.path.join(BASE_DIR, 'trained_ae', f'{ae_filename}.keras')
 
     X_train = np.array(XGlobal)
     X_test = np.array(XTestGlobal)
