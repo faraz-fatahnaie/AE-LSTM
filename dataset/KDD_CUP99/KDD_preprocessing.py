@@ -47,8 +47,8 @@ class BuildDataFrames:
         self.train = pd.read_csv(self.train_path, names=feature)
         self.test = pd.read_csv(self.test_path, names=feature)
 
-        self.train.drop(['num_outbound_cmds'], axis=1, inplace=True)
-        self.test.drop(['num_outbound_cmds'], axis=1, inplace=True)
+        # self.train.drop(['num_outbound_cmds'], axis=1, inplace=True)
+        # self.test.drop(['num_outbound_cmds'], axis=1, inplace=True)
 
         # This dataset is clean version, so these two following lines does not necessary
         self.train.drop_duplicates(keep='first')
@@ -99,14 +99,11 @@ class BuildDataFrames:
             self.test[self.label_col_name] = self.test[self.label_col_name].apply(
                 lambda x: 'attack.' if x != 'normal.' else x)
 
-    def scaling(self, normalization_method):
+    def scaling(self):
         train, test = self.train.copy(), self.test.copy()
         listContent = list(self.listNumerical)
 
-        scaler = MinMaxScaler()
-        if normalization_method == 'standardization':
-            scaler = StandardScaler()
-
+        scaler = StandardScaler()
         scaler.fit(train[listContent].values)
         train[listContent] = scaler.transform(train[listContent].values)
 
@@ -212,7 +209,7 @@ if __name__ == "__main__":
 
     preprocess.label_mapping()
     preprocess.label_binarizing()
-    preprocess.scaling(normalization_method='standardization')
+    preprocess.scaling()
     preprocess.onehot_encoding()
     preprocess.shuffle()
     preprocess.save_data_frames(save_path)

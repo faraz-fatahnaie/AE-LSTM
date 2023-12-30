@@ -11,7 +11,7 @@ from utils import set_seed
 
 
 class Preprocessor:
-    def __init__(self, dataset_path, save_path, label_col_name, norm_method):
+    def __init__(self, dataset_path, save_path, label_col_name):
         self.df_path = None
         self.DataFrame = None
         self.test_df = None
@@ -19,7 +19,6 @@ class Preprocessor:
         self.dataset_path = dataset_path
         self.save_path = save_path
         self.label_col_name = label_col_name
-        self.norm_method = norm_method
 
     def __getitem__(self):
         return self.train_df, self.test_df
@@ -108,10 +107,8 @@ class Preprocessor:
     def _scaling(self):
         train, test = self.train_df, self.test_df
         listContent = list(self.listNumerical)
-        if self.norm_method == 'normalization':
-            scaler = MinMaxScaler()
-        elif self.norm_method == 'standardization':
-            scaler = StandardScaler()
+
+        scaler = StandardScaler()
         scaler.fit(train[listContent].values)
         train[listContent] = scaler.transform(train[listContent])
         test[listContent] = scaler.transform(test[listContent])
@@ -153,8 +150,7 @@ if __name__ == '__main__':
 
     preprocessor = Preprocessor(dataset_path=data_path,
                                 save_path=save_path,
-                                label_col_name='classification',
-                                norm_method='standardization')
+                                label_col_name='classification')
     preprocessor.preprocess()
     train_preprocessed, test_preprocessed = preprocessor.__getitem__()
     print(train_preprocessed.head())
