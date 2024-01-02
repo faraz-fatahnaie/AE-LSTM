@@ -20,7 +20,7 @@ from utils import parse_data, OptimizerFactory
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Input, Dense, LSTM
 from tensorflow.keras.optimizers import Adam
-from utils import set_seed
+from utils import set_seed, get_result
 
 # Set GPU device and disable eager execution
 # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
@@ -81,7 +81,6 @@ def train_ae(params, dataset_name):
     ae_path = os.path.join(BASE_DIR, 'trained_ae', f'{ae_filename}.keras')
 
     X_train = np.array(XGlobal)
-    X_test = np.array(XTestGlobal)
     X_val = np.array(XValGlobal)
 
     if os.path.isfile(ae_path):
@@ -97,11 +96,12 @@ def train_ae(params, dataset_name):
                     input_shape=(1, X_train.shape[2]),
                     kernel_initializer=tf.keras.initializers.GlorotNormal(seed=0),
                     bias_initializer=tf.keras.initializers.Zeros(),
-                    return_sequences=True))
+                    return_sequences=True,
+                    unroll=True))
         ae.add(LSTM(X_train.shape[2],
                     kernel_initializer=tf.keras.initializers.GlorotNormal(seed=0),
                     bias_initializer=tf.keras.initializers.Zeros(),
-                    return_sequences=True))
+                    unroll=True))
 
         opt_factory_ae = OptimizerFactory(opt=opt,
                                           lr_schedule=True,
@@ -123,6 +123,7 @@ def train_ae(params, dataset_name):
         model_checkpoint = tf.keras.callbacks.ModelCheckpoint(
             filepath=os.path.join(CHECKPOINT_PATH_, 'best_ae.h5'),
             monitor='val_loss',
+            save_weights_only=True,
             mode='auto',
             save_best_only=True)
         ae_start = time.time()
@@ -170,12 +171,6 @@ def train_ae(params, dataset_name):
 
 
 def train_cf(params):
-    global YGlobal
-    global YValGlobal
-    global YTestGlobal
-    global XGlobal
-    global XValGlobal
-    global XTestGlobal
 
     global tid
     global best_ae
@@ -186,6 +181,15 @@ def train_cf(params):
     global result_path
     global load_previous_result
     global continue_loading
+
+    X_train = np.array(XGlobal)
+    y_train = np.array(YGlobal)
+
+    X_test = np.array(XTestGlobal)
+    y_test = np.array(YTestGlobal)
+
+    X_val = np.array(XValGlobal)
+    y_val = np.array(YValGlobal)
 
     if (result_path is not None) and continue_loading:
         result_table = pd.read_csv(result_path)
@@ -213,18 +217,20 @@ def train_cf(params):
     else:
         tid += 1
         tf.keras.backend.clear_session()
-        model_input = Input(shape=(1, XGlobal.shape[2]))
+        model_input = Input(shape=(1, X_train.shape[2]))
         y = LSTM(units=params['unit1'],
                  activation='tanh',
+                 return_sequences=True,
+                 unroll=True,
                  kernel_initializer=tf.keras.initializers.GlorotNormal(seed=0),
-                 bias_initializer=tf.keras.initializers.Zeros(),
-                 return_sequences=True)(model_input)
+                 bias_initializer=tf.keras.initializers.Zeros())(model_input)
         y = Dropout(params['dropout'])(y)
         y = LSTM(units=params['unit2'],
                  activation='tanh',
+                 unroll=True,
                  kernel_initializer=tf.keras.initializers.GlorotNormal(seed=0),
                  bias_initializer=tf.keras.initializers.Zeros())(y)
-        output = Dense(YGlobal.shape[1],
+        output = Dense(y_train.shape[1],
                        kernel_initializer=tf.keras.initializers.GlorotNormal(seed=0),
                        bias_initializer=tf.keras.initializers.Zeros(),
                        activation='softmax')(y)
@@ -251,37 +257,31 @@ def train_cf(params):
             restore_best_weights=True
         )
         cf_start = time.time()
-        model.fit(XGlobal, YGlobal,
-                  validation_data=(XValGlobal, YValGlobal),
-                  epochs=50,
+        model.fit(X_train, y_train,
+                  validation_data=(X_val, y_val),
+                  epochs=100,
                   batch_size=params['batch_size'],
                   callbacks=[model_checkpoint, early_stop],
                   verbose=2)
         cf_time = (time.time() - cf_start)
 
-        Y_predicted = model.predict(XValGlobal, workers=4, verbose=2)
+        Y_predicted = model.predict(X_val, workers=4, verbose=2)
 
-        y_val = np.argmax(YValGlobal, axis=1)
+        y_val = np.argmax(y_val, axis=1)
         Y_predicted = np.argmax(Y_predicted, axis=1)
 
         cf_val = metrics.confusion_matrix(y_val, Y_predicted)
-        acc_val = metrics.accuracy_score(y_val, Y_predicted)
-        precision_val = metrics.precision_score(y_val, Y_predicted, average='binary')
-        recall_val = metrics.recall_score(y_val, Y_predicted, average='binary')
-        f1_val = metrics.f1_score(y_val, Y_predicted, average='binary')
+        results_val = get_result(cf_val)
 
         test_start_time = time.time()
-        pred = model.predict(XTestGlobal, workers=4, verbose=2)
+        pred = model.predict(X_test, workers=4, verbose=2)
         test_elapsed_time = time.time() - test_start_time
 
         pred = np.argmax(pred, axis=1)
-        y_eval = np.argmax(YTestGlobal, axis=1)
+        y_eval = np.argmax(y_test, axis=1)
 
         cf_test = metrics.confusion_matrix(y_eval, pred)
-        acc_test = metrics.accuracy_score(y_eval, pred)
-        precision_test = metrics.precision_score(y_eval, pred, average='binary')
-        recall_test = metrics.recall_score(y_eval, pred, average='binary')
-        f1_test = metrics.f1_score(y_eval, pred, average='binary')
+        results_test = get_result(cf_test)
 
         result = {
             "tid": tid,
@@ -296,19 +296,21 @@ def train_cf(params):
             "FP_val": cf_val[0][1],
             "TN_val": cf_val[1][1],
             "FN_val": cf_val[1][0],
-            "OA_val": acc_val,
-            "P_val": precision_val,
-            "R_val": recall_val,
-            "F1_val": f1_val,
+            "OA_val": results_val["OA"],
+            "P_val": results_val["P"],
+            "R_val": results_val["R"],
+            "F1_val": results_val["F1"],
+            "FAR_val": results_val["FAR"],
             "test_time": int(test_elapsed_time),
             "TP_test": cf_test[0][0],
             "FP_test": cf_test[0][1],
             "FN_test": cf_test[1][0],
             "TN_test": cf_test[1][1],
-            "OA_test": acc_test,
-            "P_test": precision_test,
-            "R_test": recall_test,
-            "F1_test": f1_test,
+            "OA_test": results_test["OA"],
+            "P_test": results_test["P"],
+            "R_test": results_test["R"],
+            "F1_test": results_test["F1"],
+            "FAR_test": results_test["FAR"],
         }
 
         SavedParameters.append(result)
@@ -409,12 +411,16 @@ def hyperparameter_tuning(dataset_name):
         params_ae = {keys[i]: combination[i] for i in range(len(keys))}
         train_ae(params_ae, dataset_name)
 
-    output_of_latent = best_ae.layers[1].output
+    output_of_latent = best_ae.layers[0].output
     encoder_ae = Model(inputs=best_ae.input, outputs=output_of_latent)
 
     XGlobal = encoder_ae.predict(XGlobal, workers=4, verbose=2)
     XValGlobal = encoder_ae.predict(XValGlobal, workers=4, verbose=2)
     XTestGlobal = encoder_ae.predict(XTestGlobal, workers=4, verbose=2)
+
+    print('train set:', XGlobal.shape, YGlobal.shape)
+    print('validation set:', XValGlobal.shape, YValGlobal.shape)
+    print('test set:', XTestGlobal.shape, YTestGlobal.shape)
 
     cf_hyperparameters = {
         "unit1": hp.choice("unit1", [512, 1024]),
@@ -436,7 +442,7 @@ def hyperparameter_tuning(dataset_name):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Description of your script')
     parser.add_argument('--dataset', type=str, default='UNSW_NB15', required=True,
-                        help='dataset name choose from: "UNSW", "KDD", "CICIDS"')
+                        help='dataset name choose from: "UNSW_NB15", "KDD_CUP99", "CICIDS"')
     parser.add_argument('--result', type=str, required=False,
                         help='path of hyper-parameter training result table .csv file')
 
